@@ -2,7 +2,7 @@ pRouter
 =======
 
 pRouter is crossplatform distributed job manager and HTTP proxy. It uses multiple
-`pAgent <https://github.com/datadvance/pAgent>`_ instances to run a jobs across multiple machines. Each job can be an
+`pAgent <https://github.com/datadvance/pAgent>`_ instances to run jobs across multiple machines. Each job can be an
 interactive HTTP/Websocket server providing its own administration API.
 
 All features of pRouter are available through simple HTTP API.
