@@ -1,0 +1,15 @@
+# Router identity.
+identity:
+  name: "router"
+  uid: null
+# Router endpoint: accept connections from agents.
+server:
+  enabled: True
+  port: 0
+  interface: "127.0.0.1"
+  accept_tokens: []
+control:
+  interface: "127.0.0.1"
+  port: 0
+client:
+  polling_delay: 5
