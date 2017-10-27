@@ -29,33 +29,116 @@ from . import jobs
 
 ROUTE_VARIABLE_FSPATH = 'fspath'
 
+QUERY_KEY_REMOVE_FILE = 'remove'
+QUERY_KEY_EXECUTABLE = 'executable'
+QUERY_KEY_INCLUDE = 'include'
+QUERY_KEY_EXCLUDE = 'exclude'
+QUERY_KEY_COMPRESS = 'compress'
+
 CONTENT_TYPE_BINARY = 'application/octet-stream'
 
 
-async def download_or_upload(request):
-    """Demultiplex the file API request by the HTTP method.
+async def single_file(request):
+    """Handle file upload/download requests.
 
     GET is download, POST is upload.
-    """
-    if request.method == 'GET':
-        return await download(request)
-    elif request.method == 'POST':
-        return await upload(request)
-    else:
-        raise common.InvalidRequestData('unsupported HTTP method')
-
-async def download(request):
-    """Download a file from the job sandbox.
     """
     conn_manager = request.app[common.KEY_CONN_MANAGER]
     conn_uid = request.match_info[jobs.ROUTE_VARIABLE_CONNECTION_UID]
     job_uid = request.match_info[jobs.ROUTE_VARIABLE_JOB_UID]
     fspath = request.match_info[ROUTE_VARIABLE_FSPATH]
     connection = conn_manager.connection(conn_uid)
-    rpc_call = connection.call_istream(
-        pagent.agent_service.AgentService.file_download.__name__,
-        [job_uid, fspath]
-    )
+    if request.method == 'GET':
+        # Optional query param: remove=0/1
+        remove_source = bool(
+            int(request.query.getone(QUERY_KEY_REMOVE_FILE, 0))
+        )
+        rpc_call = connection.call_istream(
+            pagent.agent_service.AgentService.file_download.__name__,
+            [job_uid, fspath],
+            {
+                'remove': remove_source
+            }
+        )
+        return await _send_file(request, rpc_call)
+    elif request.method == 'POST':
+        # Optional query param: executable=0/1
+        executable_flag = bool(
+            int(request.query.getone(QUERY_KEY_EXECUTABLE, 0))
+        )
+        if request.content_type == CONTENT_TYPE_BINARY:
+            if request.content_length is None:
+                raise common.InvalidRequestData('no Content-Length provided')
+
+            rpc_call = connection.call_ostream(
+                pagent.agent_service.AgentService.file_upload.__name__,
+                [job_uid, fspath],
+                {
+                    'executable': executable_flag
+                }
+            )
+            await _accept_file(request, rpc_call)
+        # TODO: Support form data.
+        else:
+            raise common.InvalidRequestData(
+                'unsupported content type for HTTP upload'
+            )
+
+        return aiohttp.web.Response()
+    else:
+        raise common.InvalidRequestData('unsupported HTTP method')
+
+
+async def archive(request):
+    """Handle batch (.tar archive) upload/download requests.
+
+    GET is download, POST is upload.
+    """
+    conn_manager = request.app[common.KEY_CONN_MANAGER]
+    conn_uid = request.match_info[jobs.ROUTE_VARIABLE_CONNECTION_UID]
+    job_uid = request.match_info[jobs.ROUTE_VARIABLE_JOB_UID]
+    connection = conn_manager.connection(conn_uid)
+    if request.method == 'GET':
+        # Optional query param: include=<mask>
+        include_mask = request.query.getone(QUERY_KEY_INCLUDE, None)
+        # Optional query param: exclude=<mask>
+        exclude_mask = request.query.getone(QUERY_KEY_EXCLUDE, None)
+        # Optional query param: compress=0/1
+        compress = bool(
+            int(request.query.getone(QUERY_KEY_COMPRESS, False))
+        )
+        rpc_call = connection.call_istream(
+            pagent.agent_service.AgentService.archive_download.__name__,
+            [job_uid],
+            {
+                'include_mask': include_mask,
+                'exclude_mask': exclude_mask,
+                'compress': compress
+            }
+        )
+        return await _send_file(request, rpc_call)
+    elif request.method == 'POST':
+        if request.content_type == CONTENT_TYPE_BINARY:
+            if request.content_length is None:
+                raise common.InvalidRequestData('no Content-Length provided')
+
+            rpc_call = connection.call_ostream(
+                pagent.agent_service.AgentService.archive_upload.__name__,
+                [job_uid]
+            )
+            await _accept_file(request, rpc_call)
+        # TODO: Support form data.
+        else:
+            raise common.InvalidRequestData(
+                'unsupported content type for HTTP upload'
+            )
+
+        return aiohttp.web.Response()
+    else:
+        raise common.InvalidRequestData('unsupported HTTP method')
+
+
+async def _send_file(request, rpc_call):
     response = aiohttp.web.StreamResponse()
     async with rpc_call:
         header = await rpc_call.stream.receive()
@@ -77,45 +160,19 @@ async def download(request):
     return response
 
 
-async def upload(request):
-    """Upload a file from to the job sandbox.
-    """
-    conn_manager = request.app[common.KEY_CONN_MANAGER]
-    conn_uid = request.match_info[jobs.ROUTE_VARIABLE_CONNECTION_UID]
-    job_uid = request.match_info[jobs.ROUTE_VARIABLE_JOB_UID]
-    fspath = request.match_info[ROUTE_VARIABLE_FSPATH]
-    connection = conn_manager.connection(conn_uid)
-
-    if request.content_type == CONTENT_TYPE_BINARY:
-        if request.content_length is None:
-            raise common.InvalidRequestData(
-                'no Content-Length provided'
-            )
-
-        rpc_call = connection.call_ostream(
-            pagent.agent_service.AgentService.file_upload.__name__,
-            [job_uid, fspath]
-        )
-
-        received_size = 0
-        async with rpc_call:
+async def _accept_file(request, rpc_call):
+    received_size = 0
+    async with rpc_call:
+        chunk = await request.content.readany()
+        while chunk:
+            received_size += len(chunk)
+            if received_size > request.content_length:
+                raise common.InvalidRequestData(
+                    'request payload size does not '
+                    'match passed Content-Length'
+                )
+            await rpc_call.stream.send(chunk)
             chunk = await request.content.readany()
-            while chunk:
-                received_size += len(chunk)
-                if received_size > request.content_length:
-                    raise common.InvalidRequestData(
-                        'request payload size does not '
-                        'match passed Content-Length'
-                    )
-                await rpc_call.stream.send(chunk)
-                chunk = await request.content.readany()
-            accepted_size = await rpc_call.result
-            if accepted_size != received_size:
-                raise ValueError('upload failed')
-    # TODO: Support form data.
-    else:
-        raise common.InvalidRequestData(
-            'unsupported content type for HTTP upload'
-        )
-
-    return aiohttp.web.Response()
+        accepted_size = await rpc_call.result
+        if accepted_size != received_size:
+            raise ValueError('upload failed')

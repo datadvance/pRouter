@@ -92,9 +92,13 @@ SCHEMA_JOB_START = {
                 '.*': {'type': 'string'}
             }
         },
-        'expected_port_count': {
+        'cwd': {'oneOf': [{'type': 'string'}, {'type': 'null'}]},
+        'port_expected_count': {
             'type': 'integer',
             'minValue': 0
+        },
+        'forward_stdout': {
+            'type': 'boolean'
         }
     },
     'additionalProperties': False,
@@ -103,8 +107,7 @@ SCHEMA_JOB_START = {
 
 
 def _extend_job_info(connection, info):
-    """Extends job info with connection/API related data.
-    """
+    """Extends job info with connection/API related data."""
     info['path'] = '/jobs/%s/%s' % (connection.id, info['uid'])
     info['agent'] = {
         'platform': connection.handshake_data[pagent.identity.KEY_PLATFORM],
@@ -123,10 +126,11 @@ def _watch_active_connection(connection, polling_delay):
     async def connection_watcher():
         while connection.connected:
             if not connection.active:
-                job_count = await connection.call_simple(
-                    (pagent.agent_service.
-                        AgentService.job_count_current_connection.__name__),
+                method = (
+                    pagent.agent_service.
+                    AgentService.job_count_current_connection
                 )
+                job_count = await connection.call_simple(method.__name__)
                 if not job_count:
                     # Note: connection_unwatch is called directly from here,
                     # so shield protects connection._close
@@ -200,8 +204,7 @@ async def job_create(request):
 
 
 async def job_remove(request):
-    """Removes existing job.
-    """
+    """Removes existing job."""
     conn_manager = request.app[common.KEY_CONN_MANAGER]
     conn_uid = request.match_info[ROUTE_VARIABLE_CONNECTION_UID]
     job_uid = request.match_info[ROUTE_VARIABLE_JOB_UID]
@@ -213,8 +216,7 @@ async def job_remove(request):
 
 
 async def job_wait(request):
-    """Wait for job completion.
-    """
+    """Wait for job completion."""
     conn_manager = request.app[common.KEY_CONN_MANAGER]
     conn_uid = request.match_info[ROUTE_VARIABLE_CONNECTION_UID]
     job_uid = request.match_info[ROUTE_VARIABLE_JOB_UID]
@@ -226,8 +228,7 @@ async def job_wait(request):
 
 
 async def job_info(request):
-    """Get job info.
-    """
+    """Get job info."""
     conn_manager = request.app[common.KEY_CONN_MANAGER]
     conn_uid = request.match_info[ROUTE_VARIABLE_CONNECTION_UID]
     job_uid = request.match_info[ROUTE_VARIABLE_JOB_UID]
@@ -239,8 +240,7 @@ async def job_info(request):
 
 
 async def job_start(request):
-    """Start a process inside existing job.
-    """
+    """Start a process inside existing job."""
     conn_manager = request.app[common.KEY_CONN_MANAGER]
     conn_uid = request.match_info[ROUTE_VARIABLE_CONNECTION_UID]
     job_uid = request.match_info[ROUTE_VARIABLE_JOB_UID]
@@ -252,6 +252,8 @@ async def job_start(request):
         job_uid,
         request_data['args'],
         request_data['env'],
-        request_data.get('expected_port_count', 1)
+        request_data.get('cwd', None),
+        request_data.get('port_expected_count', 1),
+        request_data.get('forward_stdout', False)
     )
     return aiohttp.web.json_response(_extend_job_info(connection, info))

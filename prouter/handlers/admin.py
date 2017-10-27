@@ -31,31 +31,23 @@ KEY_EXIT_HANDLER = 'exit_handler'
 
 
 async def info(request):
-    """Return info about router instance.
-    """
+    """Return info about router instance."""
     identity = request.app[common.KEY_IDENTITY]
-    return aiohttp.web.json_response(
-        data=identity.get_server_handshake()
-    )
+    return aiohttp.web.json_response(data=identity.get_server_handshake())
 
 
 async def connections(request):
-    """Return info about open connections.
-    """
+    """Return info about open connections."""
     conn_manager = request.app[common.KEY_CONN_MANAGER]
-    connections = []
+    result = []
     for connection in conn_manager.get_connections():
         connection_desc = {
             'uid': connection.id,
             'mode': connection.mode.name,
             'peer': connection.handshake_data
         }
-        connections.append(connection_desc)
-    return aiohttp.web.json_response(
-        data={
-            'connections': connections
-        }
-    )
+        result.append(connection_desc)
+    return aiohttp.web.json_response(data={'connections': result})
 
 
 async def shutdown(request):

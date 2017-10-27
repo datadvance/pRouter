@@ -27,7 +27,7 @@ from . import handlers
 
 
 # Route listening for incoming RPC connections.
-ROUTE_RPC_SERVER = "/rpc/v1"
+ROUTE_RPC_SERVER = '/rpc/v1'
 
 
 ROUTES = [
@@ -42,7 +42,5 @@ def get_application(connection_manager, identity, logger):
     app[handlers.common.KEY_CONN_MANAGER] = connection_manager
     app[handlers.common.KEY_IDENTITY] = identity
     for method, route, handler in ROUTES:
-        app.router.add_route(
-            method, route, handler
-        )
+        app.router.add_route(method, route, handler)
     return app

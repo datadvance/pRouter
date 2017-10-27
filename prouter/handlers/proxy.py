@@ -54,8 +54,7 @@ SCHEMA_PROXY_ACTIVE = {
 
 @enum.unique
 class WSMessageDirection(enum.Enum):
-    """Websocket message direction for event queue.
-    """
+    """Websocket message direction for event queue."""
     JOB_TO_CLIENT = enum.auto()
     CLIENT_TO_JOB = enum.auto()
 
@@ -82,16 +81,15 @@ async def proxy_passive(request):
 
 
 async def proxy_active(request):
-    """Establish a WS bridge connection between job and a given endpoint.
-    """
-    assert request.method == "POST"
+    """Establish a WS bridge connection between job and a given endpoint."""
+    assert request.method == 'POST'
     conn_uid = request.match_info[jobs.ROUTE_VARIABLE_CONNECTION_UID]
     job_uid = request.match_info[jobs.ROUTE_VARIABLE_JOB_UID]
     # Path is already decoded there.
     path = '/' + request.match_info[ROUTE_VARIABLE_PATH]
 
     # TODO: We can support additional WS connection features like subprotocols,
-    # heartbeat etc (if needed). It should go into this config.
+    # heartbeat etc if needed. They should go into this config.
     payload = await request.json()
     jsonschema.validate(payload, SCHEMA_PROXY_ACTIVE)
 
@@ -119,7 +117,6 @@ async def proxy_active(request):
         )
 
 
-
 async def _proxy_active(url, connection, job_uid, path, query, headers,
                         remote_ws_established):
     """Establishes an agent-side WS connection, reports back to the caller,
@@ -127,11 +124,7 @@ async def _proxy_active(url, connection, job_uid, path, query, headers,
     """
     call = connection.call_bistream(
         pagent.agent_service.AgentService.ws_connect.__name__,
-        [
-            job_uid, path,
-            query,
-            headers
-        ]
+        [job_uid, path, query, headers]
     )
 
     try:
@@ -288,9 +281,7 @@ async def _proxy_websocket(request, websocket, connection, job_uid, path):
         if not connected:
             return await _proxy_error_response(call)
         await websocket.prepare(request)
-        return await _proxy_websocket_events(
-            call, websocket, request.app.loop
-        )
+        return await _proxy_websocket_events(call, websocket, request.app.loop)
 
 
 async def _proxy_websocket_events(call, websocket, loop):
@@ -339,9 +330,7 @@ async def _proxy_websocket_events(call, websocket, loop):
     finally:
         await websocket.close()
         await call.stream.close()
-    await asyncio.wait(
-        [ws_listen_task, stream_listen_task], loop=loop
-    )
+    await asyncio.wait([ws_listen_task, stream_listen_task], loop=loop)
     try:
         await call.result
     except prpc.RpcError:
@@ -358,8 +347,7 @@ async def _proxy_websocket_listen_ws(websocket, event_queue):
     payload is emitted.
     """
     async for msg in websocket:
-        if msg.type not in (aiohttp.WSMsgType.BINARY,
-                            aiohttp.WSMsgType.TEXT):
+        if msg.type not in (aiohttp.WSMsgType.BINARY, aiohttp.WSMsgType.TEXT):
             break
         await event_queue.put((WSMessageDirection.CLIENT_TO_JOB, msg.data))
     await event_queue.put((WSMessageDirection.CLIENT_TO_JOB, None))
@@ -384,9 +372,7 @@ async def _proxy_error_response(call):
     """
     try:
         try:
-            await asyncio.wait_for(
-                call.result, timeout=PROXY_EXCEPTION_TIMEOUT
-            )
+            await asyncio.wait_for(call.result, timeout=PROXY_EXCEPTION_TIMEOUT)
         except asyncio.TimeoutError:
             await call.cancel()
         return aiohttp.web.Response(

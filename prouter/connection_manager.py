@@ -53,19 +53,16 @@ class ConnectionManager(object):
 
     @property
     def debug(self):
-        """Config parameter enabling debug mode for all connections.
-        """
+        """Config parameter enabling debug mode for all connections."""
         return self._debug
 
     @property
     def polling_delay(self):
-        """Config parameter controlling poll rate of active connections.
-        """
+        """Config parameter controlling poll rate of active connections."""
         return self._polling_delay
 
     def get_connections(self):
-        """Get all active connections.
-        """
+        """Get all active connections."""
         return list(self._connections.values())
 
     def connection(self, connection_uid):
@@ -77,22 +74,20 @@ class ConnectionManager(object):
             return self._connections[connection_uid]
         except KeyError:
             raise ConnectionNotFound(
-                'connection "%s" is not found' % (connection_uid,)
+                'connection \'%s\' is not found' % (connection_uid,)
             )
 
     def by_peer_uid(self, agent_uid):
-        """Get connection by peer uid.
-        """
+        """Get connection by peer uid."""
         connection = self._incoming_by_uid.get(agent_uid)
         if connection is None:
             raise ConnectionNotFound(
-                'no connected agent with uid "%s"' % (agent_uid,)
+                'no connected agent with uid \'%s\'' % (agent_uid,)
             )
         return connection
 
     def register(self, connection, handshake):
-        """Try to register new connection with given handshake.
-        """
+        """Try to register new connection with given handshake."""
         assert connection.mode in prpc.ConnectionMode
         assert connection.mode != prpc.ConnectionMode.NEW
         # In fact, we should wait for key for some time
@@ -104,20 +99,20 @@ class ConnectionManager(object):
         peer_uid = identity.Identity.get_uid(handshake)
         if connection.id in self._connections:
             raise ValueError(
-                'connection "%s" (mode: %s) is already registered' %
+                'connection \'%s\' (mode: %s) is already registered' %
                 (connection.id, connection.mode)
             )
         if connection.mode == prpc.ConnectionMode.SERVER:
             if peer_uid in self._incoming_by_uid:
                 raise ValueError(
-                    'incoming connection from peer "%s" is already registered' %
-                    (peer_uid,)
+                    'incoming connection from peer \'%s\' '
+                    'is already registered' % (peer_uid,)
                 )
             self._incoming_by_uid[peer_uid] = connection
         connection.on_close.append(self._unregister)
         self._connections[connection.id] = connection
         self._log.info(
-            'New connection: id %s, mode: %s, peer: %s, token: %s',
+            'New connection: id \'%s\', mode: %s, peer: \'%s\', token: \'%s\'',
             connection.id,
             connection.mode.name,
             peer_uid,
@@ -125,14 +120,14 @@ class ConnectionManager(object):
         )
 
     def _unregister(self, connection):
-        """Unregisters connection when it is closed.
-        """
+        """Unregisters connection when it is closed."""
         del self._connections[connection.id]
         peer_uid = identity.Identity.get_uid(connection.handshake_data)
         if connection.mode == prpc.ConnectionMode.SERVER:
             del self._incoming_by_uid[peer_uid]
         self._log.info(
-            'Dropped connection: id %s, mode: %s, peer: %s, token: %s',
+            'Dropped connection: '
+            'id \'%s\', mode: %s, peer: \'%s\', token: \'%s\'',
             connection.id,
             connection.mode.name,
             identity.Identity.get_uid(connection.handshake_data),

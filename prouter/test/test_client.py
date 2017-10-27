@@ -28,8 +28,7 @@ import pytest
 
 @pytest.mark.async_test
 async def test_http_job(event_loop, router_process, http_server_command):
-    """Basic sanity test - create/run a simple job, run a HTTP request to it.
-    """
+    """Basic sanity test - create/run a simple job, run a HTTP request to it."""
     async with router_process(client_enabled=False) as router:
         job = await router.job_create(by_uid=False)
         await router.job_start(job['path'], http_server_command())
@@ -50,9 +49,9 @@ async def test_connection_timeout(event_loop, router_process,
     CONNECTION_TIMEOUT_MAX_WAIT = 10
     CONNECTION_CHECK_DELAY = 0.1
     async with router_process(
-            '--set',
-            'client.polling_delay=%f' % (CONNECTION_CHECK_DELAY,),
-            client_enabled=False
+        '--set',
+        'client.polling_delay=%f' % (CONNECTION_CHECK_DELAY,),
+        client_enabled=False
     ) as router:
         job = await router.job_create(by_uid=False)
         await router.job_start(job['path'], http_server_command())

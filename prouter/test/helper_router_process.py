@@ -148,14 +148,16 @@ class RouterProcess(object):
             assert response.status == http.HTTPStatus.OK
             return await response.json()
 
-    async def job_start(self, job_path, args, env={}, expected_port_count=1):
+    async def job_start(self, job_path, args,
+                        env={}, cwd=None, port_expected_count=1):
         async with self._session.request(
             'POST',
             self.endpoint_control.with_path(job_path + '/start'),
             json={
                 'args': args,
                 'env': env,
-                'expected_port_count': expected_port_count
+                'cwd': cwd,
+                'port_expected_count': port_expected_count
             }
         ) as response:
             assert response.status == http.HTTPStatus.OK

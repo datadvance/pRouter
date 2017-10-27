@@ -44,10 +44,8 @@ def initialize():
             key, value = arg.split('=', 2)
             try:
                 value = ast.literal_eval(value)
-            except Exception as ex:
-                raise ValueError(
-                    'invalid value for config key "%s"' % (key,)
-                )
+            except Exception:
+                raise ValueError('invalid value for config key \'%s\'' % (key,))
             config_path = key.split('.')
             config_node = config
             for key_element in config_path[:-1]:

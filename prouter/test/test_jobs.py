@@ -24,6 +24,9 @@
 import asyncio
 import http
 import io
+import os
+import pathlib
+import tarfile
 import uuid
 
 import aiohttp.web
@@ -121,8 +124,7 @@ async def test_active_ws(event_loop, router_process, http_server_command):
 
 @pytest.mark.async_test
 async def test_upload_download(event_loop, router_process):
-    """Check basic file upload/download features.
-    """
+    """Check basic file upload/download features."""
     TEST_DATA_PAYLOAD = uuid.uuid4().bytes * (1 << 20)
     UPLOAD_FILENAME = 'the_data.bin'
 
@@ -160,9 +162,74 @@ async def test_upload_download(event_loop, router_process):
 
 
 @pytest.mark.async_test
-async def test_job_not_found(event_loop, router_process):
-    """Check HTTP responses if job or connection do not exist.
+async def test_upload_download_archive(event_loop, router_process, tmpdir):
+    """Check archive upload/download features.
+
+    More checks (unicode etc) are in corresponding test in pAgent.
     """
+    DATA_PATH = pathlib.Path(tmpdir.mkdir('data'))
+    UPLOAD_PATH = pathlib.Path(tmpdir.join('upload.tar'))
+    DOWNLOAD_ARC = pathlib.Path(tmpdir.join('download.tar'))
+    DOWNLOAD_PATH = pathlib.Path(tmpdir.join('download'))
+    FILES = [
+        'something.py',
+        'whatever.txt',
+        'nested/something_too.py'
+    ]
+    for filename in FILES:
+        target = DATA_PATH.joinpath(filename)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        with open(target, 'w') as target_file:
+            target_file.write(uuid.uuid4().hex * 128)
+    with tarfile.open(UPLOAD_PATH, 'w') as arc:
+        for file_path in DATA_PATH.iterdir():
+            arc.add(file_path, arcname=file_path.name)
+    async with router_process() as router:
+        job = await router.job_create()
+        with open(UPLOAD_PATH, 'rb') as arc:
+            response = await router.session.request(
+                'POST',
+                router.endpoint_control.with_path(
+                    job['path'] + '/archive'
+                ),
+                headers={
+                    'Content-Type': 'application/octet-stream',
+                    'Content-Length': str(UPLOAD_PATH.stat().st_size)
+                },
+                data=arc
+            )
+            async with response:
+                assert response.status == http.HTTPStatus.OK
+        with open(DOWNLOAD_ARC, 'wb') as arc:
+            response = await router.session.request(
+                'GET',
+                router.endpoint_control.with_path(
+                    job['path'] + '/archive'
+                ).with_query(
+                    {
+                        'include': '*.py',
+                        'exclude': 'nested/*',
+                        'compress': '0'
+                    }
+                )
+            )
+            async with response:
+                assert response.status == http.HTTPStatus.OK
+                chunk = await response.content.readany()
+                while chunk:
+                    arc.write(chunk)
+                    chunk = await response.content.readany()
+        with tarfile.open(DOWNLOAD_ARC, 'r') as arc:
+            arc.extractall(DOWNLOAD_PATH)
+        assert len(os.listdir(DOWNLOAD_PATH)) == 1
+        with open(DATA_PATH.joinpath('something.py')) as uploaded:
+            with open(DOWNLOAD_PATH.joinpath('something.py')) as downloaded:
+                assert uploaded.read() == downloaded.read()
+
+
+@pytest.mark.async_test
+async def test_job_not_found(event_loop, router_process):
+    """Check HTTP responses if job or connection do not exist."""
     async with router_process() as router:
         job = await router.job_create()
         await router.job_info(job['path'])
@@ -196,8 +263,7 @@ async def test_job_not_found(event_loop, router_process):
 
 @pytest.mark.async_test
 async def test_invalid_request(event_loop, router_process):
-    """Check HTTP response on invalid job_create request payload.
-    """
+    """Check HTTP response on invalid job_create request payload."""
     async with router_process() as router:
         # Don't try to exhaustively test all commands, just check the
         # general response for jsonschema errors (they should lead to

@@ -79,7 +79,7 @@ Available HTTP commands on administrative endpoint:
         'name': JOB_NAME
     }
 
-    
+
 * POST '/jobs/JOB_ID/start' - Start a job. Arguments::
 
     {

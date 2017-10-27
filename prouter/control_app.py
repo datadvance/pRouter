@@ -47,9 +47,10 @@ ROUTE_JOB_HTTP = _ROUTE_PREFIX_JOBS + '/http/{%s:.*}' % (
 ROUTE_JOB_WS_ACTIVE = _ROUTE_PREFIX_JOBS + '/wsconnect/{%s:.*}' % (
     handlers.proxy.ROUTE_VARIABLE_PATH,
 )
-ROUTE_JOB_FILE_API = _ROUTE_PREFIX_JOBS + '/file/{%s:.*}' % (
+ROUTE_JOB_FILE_API = _ROUTE_PREFIX_JOBS + '/file/{%s:.+}' % (
     handlers.files.ROUTE_VARIABLE_FSPATH,
 )
+ROUTE_JOB_ARCHIVE_API = _ROUTE_PREFIX_JOBS + '/archive'
 
 
 ROUTES = [
@@ -63,7 +64,8 @@ ROUTES = [
     ('POST', ROUTE_JOB_START, handlers.jobs.job_start),
     ('*', ROUTE_JOB_HTTP, handlers.proxy.proxy_passive),
     ('POST', ROUTE_JOB_WS_ACTIVE, handlers.proxy.proxy_active),
-    ('*', ROUTE_JOB_FILE_API, handlers.files.download_or_upload)
+    ('*', ROUTE_JOB_FILE_API, handlers.files.single_file),
+    ('*', ROUTE_JOB_ARCHIVE_API, handlers.files.archive)
 ]
 
 
@@ -90,6 +92,5 @@ def get_application(connection_manager, identity, exit_handler, logger):
 
     for method, route, handler in ROUTES:
         app.router.add_route(method, route, handler)
-
 
     return app

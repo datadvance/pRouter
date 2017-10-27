@@ -21,19 +21,4 @@
 # SOFTWARE.
 #
 
-import pathlib
-
-import yaml
-
-from . import schemas
-
-
-def load_default():
-    path = pathlib.Path(__file__).absolute().parent.joinpath('default.yaml')
-    return load(path)
-
-
-def load(config_path):
-    with open(config_path) as f:
-        loaded = yaml.safe_load(f)
-    return loaded
+from .router import Router

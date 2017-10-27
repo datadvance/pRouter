@@ -56,12 +56,7 @@ def setup_logging(args):
     # root logger accepts all messages, filter on handlers level
     root_logger.setLevel(logging.DEBUG)
     for handler in [logging.StreamHandler(sys.stdout)]:
-        handler.setFormatter(
-            logging.Formatter(
-                '[%(process)d] [%(asctime)s] '
-                '[%(name)s] [%(levelname)s] %(message)s'
-            )
-        )
+        handler.setFormatter(logging.Formatter(args.log_format))
         handler.setLevel(args.log_level.upper())
         root_logger.addHandler(handler)
 
@@ -82,8 +77,7 @@ class ExitHandler(object):
         self._exit_code = 0
 
     def __call__(self, exit_code=0):
-        """Submit exit task to the event loop. Ignores multiple calls.
-        """
+        """Submit exit task to the event loop. Ignores multiple calls."""
         if self._exit_sent:
             self._log.debug('Exit in progress, exit request ignored')
             return
@@ -93,15 +87,13 @@ class ExitHandler(object):
         self._exit_code = exit_code
 
     async def wait(self):
-        """If exit task is active, wait for it to finish.
-        """
+        """If exit task is active, wait for it to finish."""
         if self._exit_task:
             await self._exit_task
         return self._exit_code
 
     async def _loop_exit(self):
-        """Actual exit/cleanup implementation.
-        """
+        """Actual exit/cleanup implementation."""
         # Cleanup current connections.
         # It's done before disabling the server, so that
         # asyncio is less unhappy.
@@ -184,12 +176,7 @@ async def run(args, config, main_log, loop):
     servers.append(control_server)
     lifetime_tasks.append(control_server.wait())
 
-    signal.signal(
-        signal.SIGINT,
-        make_signal_handler(
-            exit_handler, loop
-        )
-    )
+    signal.signal(signal.SIGINT, make_signal_handler(exit_handler, loop))
     await asyncio.wait(lifetime_tasks, loop=loop)
 
 
