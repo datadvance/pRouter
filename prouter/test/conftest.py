@@ -1,6 +1,6 @@
 #
 # coding: utf-8
-# Copyright (c) 2017 DATADVANCE
+# Copyright (c) 2018 DATADVANCE
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -28,6 +28,7 @@ import sys
 import pytest
 
 from pagent.test.conftest import http_server_command
+
 from . import helper_router_process
 
 

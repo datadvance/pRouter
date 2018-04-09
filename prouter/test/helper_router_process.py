@@ -1,6 +1,6 @@
 #
 # coding: utf-8
-# Copyright (c) 2017 DATADVANCE
+# Copyright (c) 2018 DATADVANCE
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -29,13 +29,12 @@ import sys
 import uuid
 
 import aiohttp
-import prpc
 import yarl
 
-from prouter import control_app
-from prouter import router_app
+import prpc
 from pagent import polled_process
 from pagent.test import helper_agent_process
+from prouter import control_app, router_app
 
 
 LOCALHOST_WS_URL = yarl.URL("ws://127.0.0.1")
@@ -282,5 +281,5 @@ class RouterProcess(object):
         self._agent_process = None
         self._port_control = None
         self._port_router = None
-        self._session.close()
+        await self._session.close()
         return False

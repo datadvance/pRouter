@@ -1,6 +1,6 @@
 #
 # coding: utf-8
-# Copyright (c) 2017 DATADVANCE
+# Copyright (c) 2018 DATADVANCE
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -25,10 +25,12 @@ import asyncio
 
 import aiohttp.web
 import jsonschema
+import yarl
+
 import pagent.agent_service
 import pagent.identity
 import prpc
-import yarl
+from prouter.api import jobenv
 
 from . import common
 
@@ -66,6 +68,50 @@ SCHEMA_JOB_CREATE = {
                     },
                     'additionalProperties': False,
                     'required': ['type', 'address', 'token']
+                },
+                {
+                    'type': 'object',
+                    'properties': {
+                        'type': {
+                            'type': 'string',
+                            'enum': ['select']
+                        },
+                        'runtimes': {
+                            'type': 'array',
+                            'description': 'Possible runtimes, '
+                                           'platform and jobenvs. '
+                                           'May be empty.',
+                            'items': {
+                                'type': 'object',
+                                'properties': {
+                                    'uid': {'type': 'string'},
+                                    'platform': {
+                                        'type': 'array',
+                                        'items': {
+                                            'type': 'object',
+                                            'description': 'Agent uname.'
+                                        }
+                                    },
+                                    'jobenv': {
+                                        'type': 'array',
+                                        'items': {
+                                            'type': 'object',
+                                            'properties': {
+                                                'guid': {'type': 'string'},
+                                                'version': {'type': 'string'},
+                                            },
+                                            'additionalProperties': False,
+                                            'required': ['guid', 'version']
+                                        }
+                                    }
+                                },
+                                'additionalProperties': False,
+                                'required': ['uid', 'platform', 'jobenv']
+                            }
+                        }
+                    },
+                    'additionalProperties': False,
+                    'required': ['type', 'runtimes'],
                 }
             ]
         },
@@ -147,6 +193,7 @@ def _watch_active_connection(connection, polling_delay):
 
     connection.on_close.append(connection_unwatch)
 
+
 async def job_create(request):
     """Create a new job on a given agent.
 
@@ -160,9 +207,28 @@ async def job_create(request):
     job_name = request_data['name']
     agent_locator = request_data['agent']
     agent_locator_type = agent_locator['type']
+    job_runtime = {}
     if agent_locator_type == 'uid':
         agent_uid = agent_locator['uid']
         connection = conn_manager.by_peer_uid(agent_uid)
+    elif agent_locator_type == 'select':
+        connections = {con.id: con for con in conn_manager.get_connections()
+                       if con.mode == prpc.ConnectionMode.SERVER}
+        hosts = [jobenv.Host(uid, con.handshake_data['platform'],
+                             jobenv.search(con.handshake_data['properties']))
+                 for uid, con in connections.items()]
+
+        runtimes = []
+        for rt in agent_locator['runtimes']:
+            envs = [jobenv.jobenv_from_dict(env) for env in rt['jobenv']]
+            runtimes.append(jobenv.Runtime(rt['uid'], rt['platform'], envs))
+
+        host, host_jobenv, rt_uid = jobenv.select(hosts, runtimes)
+        connection = connections[host.uid]
+        if rt_uid:
+            job_runtime['runtime'] = {'uid': rt_uid}
+            if host_jobenv:
+                job_runtime['runtime']['activate'] = host_jobenv.activate
     elif agent_locator_type == 'address':
         agent_address = agent_locator['address']
         agent_token = agent_locator['token']
@@ -200,7 +266,9 @@ async def job_create(request):
     if connection.mode == prpc.ConnectionMode.CLIENT:
         _watch_active_connection(connection, conn_manager.polling_delay)
 
-    return aiohttp.web.json_response(_extend_job_info(connection, info))
+    result = _extend_job_info(connection, info)
+    result.update(job_runtime)
+    return aiohttp.web.json_response(result)
 
 
 async def job_remove(request):

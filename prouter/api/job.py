@@ -1,6 +1,6 @@
 #
 # coding: utf-8
-# Copyright (c) 2017 DATADVANCE
+# Copyright (c) 2018 DATADVANCE
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -21,16 +21,16 @@
 # SOFTWARE.
 #
 
-import pathlib
 import io
-import stat
-import uuid
-import tempfile
-import tarfile
-import http
+import pathlib
 import shutil
+import stat
+import tarfile
+import tempfile
+import uuid
 
 from prouter import control_app
+
 
 class Job(object):
     """ Router job interface. Intended to simplify interaction with pRouter.
@@ -41,22 +41,34 @@ class Job(object):
         uid: agent uid, either uid or address and token must be specified.
         address: agent address.
         token: agent access token.
+        runtimes: list of agent runtimes for automatic agent selection.
     """
-    def __init__(self, router, name, uid=None, address=None, token=None):
+    def __init__(self, router, name,
+                 uid=None, address=None, token=None, runtimes=None):
         assert address is None == token is None, (
             'agent address and token must be speicified or omited together')
-        assert bool(uid) != bool(address), (
-            'either agent uid or agent address required')
+        assert not (bool(uid) and bool(address)), (
+            'agent uid and agent address must not be specified together')
 
         self._router = router
         self._job = None
-        agent = {'type': 'uid' if uid else 'address'}
+        agent = {}
         if uid:
+            agent['type'] = 'uid'
             agent['uid'] = uid
-        else:
+        elif address and token:
+            agent['type'] = 'address'
             agent['address'] = address
             agent['token'] = token
+        else:
+            agent['type'] = 'select'
+            agent['runtimes'] = runtimes
         self._args = {'json': {'name': name, 'agent': agent}}
+
+    @property
+    def properties(self):
+        """ Returns: static job properties. """
+        return self._job
 
     async def info(self):
         """ Returns: information about job as json. """
@@ -80,18 +92,16 @@ class Job(object):
         request_kwargs['json']['args'] = args
         return await self._request('POST', 'start', kwargs=request_kwargs)
 
-    async def upload(self, target, source, tmpdir=None):
+    async def upload(self, target, source, tmpdir=None, **params):
         """ Upload file or directory to job directory.
         Args:
-            target: destination path, must be relative.
-            source: upload target.
+            target: destination path must be relative.
+            source: upload target, string interpreted as file or directory path
+                bytes-like objects are uploaded as file content
             tmpdir: temporary directory where upload archive is created.
+            params: additional request parameters (i.e. executable=1).
         """
         target = pathlib.Path(target)
-        source = pathlib.Path(source)
-        if not source.exists():
-            raise ValueError('upload source not found: \'%s\'' % (source,))
-
         kwargs = {
             'headers': {
                 'Content-Type': 'application/octet-stream',
@@ -99,11 +109,30 @@ class Job(object):
             },
             'data': None
         }
+        if params:
+            kwargs['params'] = {k: str(v) for k, v in params.items()}
+
+        ## TODO: what about io.StringIO ?
+        if isinstance(source, (bytes, bytearray, io.BytesIO)):
+            if not isinstance(source, io.BytesIO):
+                source = io.BytesIO(source)
+            source.seek(0, io.SEEK_END)
+            kwargs['headers']['Content-Length'] = str(source.tell())
+            source.seek(0, io.SEEK_SET)
+            kwargs['data'] = source
+            return await self._request('POST', 'file/%s' % (target,),
+                                       result=False, kwargs=kwargs)
+
+        source = pathlib.Path(source)
+        if not source.exists():
+            raise ValueError('upload source not found: \'%s\'' % (source,))
 
         if source.is_file():
             file_stat = source.stat()
             if file_stat.st_mode & stat.S_IEXEC:
-                kwargs['params'] = {'executable': '1'}
+                if 'params' not in kwargs:
+                    kwargs['params'] = {}
+                kwargs['params']['executable'] = '1'
             with source.open('rb') as file:
                 kwargs['data'] = file
                 kwargs['headers']['Content-Length'] = str(file_stat.st_size)
@@ -138,7 +167,7 @@ class Job(object):
         """
         url = self._router.url.with_path(self._path('file/%s' % target))
         async with self._router.session.request('GET', url) as response:
-            assert response.status == http.HTTPStatus.OK
+            response.raise_for_status()
             buffer = io.BytesIO()
             chunk = await response.content.readany()
             while chunk:
@@ -146,8 +175,8 @@ class Job(object):
                 chunk = await response.content.readany()
             return buffer.getvalue()
 
-    async def download_archive(self, target,
-                               exclude=None, tmpdir=None, destination=None):
+    async def download_archive(
+            self, target, exclude=None, tmpdir=None, destination=None):
         """ Download files (or directories) from job directory as tar archive.
             Optionally uppack archive to destination directory.
         Args:
@@ -173,11 +202,11 @@ class Job(object):
                 params = {'include': str(target)}
                 if exclude:
                     params['exclude'] = str(exclude)
-                response = self._router.session.request(
+                response = await self._router.session.request(
                     'GET', url, params=params
                 )
                 async with response:
-                    assert response.status == http.HTTPStatus.OK
+                    response.raise_for_status()
                     chunk = await response.content.readany()
                     while chunk:
                         arc.write(chunk)
@@ -201,6 +230,10 @@ class Job(object):
         """ Open websocket connection with job. """
         url = self._router.url.with_path(self._path('http/%s' % path))
         return await self._router.session.ws_connect(url, **kwargs)
+
+    async def ws_loopback(self, path, loopback_url):
+        kwargs = {'json': {'url': str(loopback_url)}}
+        await self._request('POST', 'wsconnect/%s' % path, False, kwargs)
 
     def _path(self, path):
         assert self._job

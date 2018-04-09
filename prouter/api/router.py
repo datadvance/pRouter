@@ -1,6 +1,6 @@
 #
 # coding: utf-8
-# Copyright (c) 2017 DATADVANCE
+# Copyright (c) 2018 DATADVANCE
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -21,7 +21,6 @@
 # SOFTWARE.
 #
 
-import http
 import aiohttp.web
 import yarl
 
@@ -59,15 +58,15 @@ class Router(object):
 
     async def request(self, method, path, result=True, kwargs=None):
         """ Send http request to router. """
-        response = self._session.request(
+        response = await self._session.request(
             method, self._url.with_path(path), **(kwargs or {})
         )
         async with response:
-            assert response.status == http.HTTPStatus.OK
+            response.raise_for_status()
             if result:
                 return await response.json()
 
-    def job(self, name, uid=None, address=None, token=None):
+    def job(self, name, uid=None, address=None, token=None, runtimes=None):
         """ Create job on specified agent.
         Args:
             name: job name.
@@ -76,4 +75,4 @@ class Router(object):
             token: agent access token.
         Returns: new job instance.
         """
-        return Job(self, name, uid, address, token)
+        return Job(self, name, uid, address, token, runtimes)

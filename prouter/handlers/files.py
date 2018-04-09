@@ -1,6 +1,6 @@
 #
 # coding: utf-8
-# Copyright (c) 2017 DATADVANCE
+# Copyright (c) 2018 DATADVANCE
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -21,10 +21,10 @@
 # SOFTWARE.
 
 import aiohttp.web
+
 import pagent.agent_service
 
-from . import common
-from . import jobs
+from . import common, jobs
 
 
 ROUTE_VARIABLE_FSPATH = 'fspath'
@@ -151,7 +151,7 @@ async def _send_file(request, rpc_call):
             response.content_length = header['size']
             await response.prepare(request)
             async for chunk in rpc_call.stream:
-                response.write(chunk)
+                await response.write(chunk)
                 await response.drain()
         # Failed immediately.
         # TODO: Specialized error handling, esp. file does not exist?
