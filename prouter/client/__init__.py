@@ -21,26 +21,6 @@
 # TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 # SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-import aiohttp.web
 
-from . import handlers
-
-
-# Route listening for incoming RPC connections.
-ROUTE_RPC_SERVER = '/rpc/v1'
-
-
-ROUTES = [
-    ('GET', ROUTE_RPC_SERVER, handlers.rpc.accept_agent)
-]
-
-
-def get_application(connection_manager, identity, logger):
-    """Creates the router application that accepts incoming agent connections.
-    """
-    app = aiohttp.web.Application(logger=logger)
-    app[handlers.common.KEY_CONN_MANAGER] = connection_manager
-    app[handlers.common.KEY_IDENTITY] = identity
-    for method, route, handler in ROUTES:
-        app.router.add_route(method, route, handler)
-    return app
+from .router_client import RouterClient
+from .job_client import JobClient

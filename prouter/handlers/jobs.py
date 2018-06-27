@@ -2,26 +2,27 @@
 # coding: utf-8
 # Copyright (c) 2018 DATADVANCE
 #
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
+# Permission is hereby granted, free of charge, to any person obtaining
+# a copy of this software and associated documentation files (the
+# "Software"), to deal in the Software without restriction, including
+# without limitation the rights to use, copy, modify, merge, publish,
+# distribute, sublicense, and/or sell copies of the Software, and to
+# permit persons to whom the Software is furnished to do so, subject to
+# the following conditions:
 #
-# The above copyright notice and this permission notice shall be included in all
-# copies or substantial portions of the Software.
+# The above copyright notice and this permission notice shall be
+# included in all copies or substantial portions of the Software.
 #
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
-# OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-# SOFTWARE.
-#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+# EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+# MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+# IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+# CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+# TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+# SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 import asyncio
+import random
 
 import aiohttp.web
 import jsonschema
@@ -30,7 +31,6 @@ import yarl
 import pagent.agent_service
 import pagent.identity
 import prpc
-from prouter.api import jobenv
 
 from . import common
 
@@ -47,10 +47,7 @@ SCHEMA_JOB_CREATE = {
                 {
                     'type': 'object',
                     'properties': {
-                        'type': {
-                            'type': 'string',
-                            'enum': ['uid']
-                        },
+                        'type': {'type': 'string', 'enum': ['uid']},
                         'uid': {'type': 'string'}
                     },
                     'additionalProperties': False,
@@ -59,10 +56,7 @@ SCHEMA_JOB_CREATE = {
                 {
                     'type': 'object',
                     'properties': {
-                        'type': {
-                            'type': 'string',
-                            'enum': ['address']
-                        },
+                        'type': {'type': 'string', 'enum': ['address']},
                         'address': {'type': 'string'},
                         'token': {'type': 'string'}
                     },
@@ -72,46 +66,15 @@ SCHEMA_JOB_CREATE = {
                 {
                     'type': 'object',
                     'properties': {
-                        'type': {
-                            'type': 'string',
-                            'enum': ['select']
-                        },
-                        'runtimes': {
+                        'type': {'type': 'string', 'enum': ['select']},
+                        'uids': {
                             'type': 'array',
-                            'description': 'Possible runtimes, '
-                                           'platform and jobenvs. '
-                                           'May be empty.',
-                            'items': {
-                                'type': 'object',
-                                'properties': {
-                                    'uid': {'type': 'string'},
-                                    'platform': {
-                                        'type': 'array',
-                                        'items': {
-                                            'type': 'object',
-                                            'description': 'Agent uname.'
-                                        }
-                                    },
-                                    'jobenv': {
-                                        'type': 'array',
-                                        'items': {
-                                            'type': 'object',
-                                            'properties': {
-                                                'guid': {'type': 'string'},
-                                                'version': {'type': 'string'},
-                                            },
-                                            'additionalProperties': False,
-                                            'required': ['guid', 'version']
-                                        }
-                                    }
-                                },
-                                'additionalProperties': False,
-                                'required': ['uid', 'platform', 'jobenv']
-                            }
+                            'items': {'type': 'string'},
+                            'minItems': 1
                         }
                     },
                     'additionalProperties': False,
-                    'required': ['type', 'runtimes'],
+                    'required': ['type', 'uids'],
                 }
             ]
         },
@@ -207,28 +170,13 @@ async def job_create(request):
     job_name = request_data['name']
     agent_locator = request_data['agent']
     agent_locator_type = agent_locator['type']
-    job_runtime = {}
     if agent_locator_type == 'uid':
         agent_uid = agent_locator['uid']
         connection = conn_manager.by_peer_uid(agent_uid)
     elif agent_locator_type == 'select':
-        connections = {con.id: con for con in conn_manager.get_connections()
-                       if con.mode == prpc.ConnectionMode.SERVER}
-        hosts = [jobenv.Host(uid, con.handshake_data['platform'],
-                             jobenv.search(con.handshake_data['properties']))
-                 for uid, con in connections.items()]
-
-        runtimes = []
-        for rt in agent_locator['runtimes']:
-            envs = [jobenv.jobenv_from_dict(env) for env in rt['jobenv']]
-            runtimes.append(jobenv.Runtime(rt['uid'], rt['platform'], envs))
-
-        host, host_jobenv, rt_uid = jobenv.select(hosts, runtimes)
-        connection = connections[host.uid]
-        if rt_uid:
-            job_runtime['runtime'] = {'uid': rt_uid}
-            if host_jobenv:
-                job_runtime['runtime']['activate'] = host_jobenv.activate
+        agent_uids = agent_locator['uids']
+        agent_uid = agent_uids[random.randint(0, len(agent_uids) - 1)]
+        connection = conn_manager.by_peer_uid(agent_uid)
     elif agent_locator_type == 'address':
         agent_address = agent_locator['address']
         agent_token = agent_locator['token']
@@ -266,9 +214,7 @@ async def job_create(request):
     if connection.mode == prpc.ConnectionMode.CLIENT:
         _watch_active_connection(connection, conn_manager.polling_delay)
 
-    result = _extend_job_info(connection, info)
-    result.update(job_runtime)
-    return aiohttp.web.json_response(result)
+    return aiohttp.web.json_response(_extend_job_info(connection, info))
 
 
 async def job_remove(request):

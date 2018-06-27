@@ -97,3 +97,16 @@ Available HTTP commands on administrative endpoint:
 * GET '/jobs/JOB_PATH/file/RELATIVE_FILE_PATH' - download a file from job sandbox.
 
 * POST (application/octet-stream) '/jobs/JOB_PATH/file/RELATIVE_FILE_PATH' - upload a file to job sandbox.
+
+Contributing
+------------
+
+This project is developed and maintained by DATADVANCE LLC. Please
+submit an issue if you have any questions or want to suggest an
+improvement.
+
+Acknowledgements
+----------------
+
+This work is supported by the Russian Foundation for Basic Research
+(project No. 15-29-07043).
