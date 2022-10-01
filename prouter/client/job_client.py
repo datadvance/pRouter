@@ -281,7 +281,29 @@ class JobClient(object):
             unpack_path = pathlib.Path(tempdir).joinpath('unpacked')
             unpack_path.mkdir()  # pylint: disable=no-member
             with tarfile.open(arcpath, 'r') as arc:
-                arc.extractall(unpack_path)
+                
+                import os
+                
+                def is_within_directory(directory, target):
+                    
+                    abs_directory = os.path.abspath(directory)
+                    abs_target = os.path.abspath(target)
+                
+                    prefix = os.path.commonprefix([abs_directory, abs_target])
+                    
+                    return prefix == abs_directory
+                
+                def safe_extract(tar, path=".", members=None, *, numeric_owner=False):
+                
+                    for member in tar.getmembers():
+                        member_path = os.path.join(path, member.name)
+                        if not is_within_directory(path, member_path):
+                            raise Exception("Attempted Path Traversal in Tar File")
+                
+                    tar.extractall(path, members, numeric_owner) 
+                    
+                
+                safe_extract(arc, unpack_path)
             unpack_path = unpack_path.joinpath(source)
             for src in unpack_path.glob('**/*'):  # pylint: disable=no-member
                 dst = destination.joinpath(src.relative_to(unpack_path))
