@@ -237,7 +237,7 @@ async def test_upload_download_archive(event_loop, router_process, tmpdir):
                     if not is_within_directory(path, member_path):
                         raise Exception("Attempted Path Traversal in Tar File")
             
-                tar.extractall(path, members, numeric_owner) 
+                tar.extractall(path, members, numeric_owner=numeric_owner) 
                 
             
             safe_extract(arc, DOWNLOAD_PATH)
