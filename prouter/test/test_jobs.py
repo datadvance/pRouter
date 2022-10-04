@@ -221,7 +221,26 @@ async def test_upload_download_archive(event_loop, router_process, tmpdir):
                     arc.write(chunk)
                     chunk = await response.content.readany()
         with tarfile.open(DOWNLOAD_ARC, 'r') as arc:
-            arc.extractall(DOWNLOAD_PATH)
+            def is_within_directory(directory, target):
+                
+                abs_directory = os.path.abspath(directory)
+                abs_target = os.path.abspath(target)
+            
+                prefix = os.path.commonprefix([abs_directory, abs_target])
+                
+                return prefix == abs_directory
+            
+            def safe_extract(tar, path=".", members=None, *, numeric_owner=False):
+            
+                for member in tar.getmembers():
+                    member_path = os.path.join(path, member.name)
+                    if not is_within_directory(path, member_path):
+                        raise Exception("Attempted Path Traversal in Tar File")
+            
+                tar.extractall(path, members, numeric_owner=numeric_owner) 
+                
+            
+            safe_extract(arc, DOWNLOAD_PATH)
         assert len(os.listdir(DOWNLOAD_PATH)) == 1
         with open(DATA_PATH.joinpath('something.py')) as uploaded:
             with open(DOWNLOAD_PATH.joinpath('something.py')) as downloaded:
